@@ -9,85 +9,85 @@ typedef enum Opcode {
 
     /// AND - Bitwise AND.
     /// Semantics: Rd := Rn & Op2
-    AND = 0x0,
+    OP_AND = 0x0,
 
     /// ORR - Bitwise OR.
     /// Semantics: Rd := Rn | Op2
-    ORR,
+    OP_ORR,
 
     /// EOR - Bitwise XOR.
     /// Semantics: Rd := Rn ^ Op2
-    EOR,
+    OP_EOR,
 
 
     // Add
 
     /// ADD - Add.
     /// Semantics: Rd := Rn + Op2
-    ADD,
+    OP_ADD,
 
     /// ADC - Add with carry-in.
     /// Semantics: Rd := Rn + Op2 + C
-    ADC,
+    OP_ADC,
 
 
     // Subtract
 
     /// SUB - Subtract.
     /// Semantics: Rd := Rn - Op2
-    SUB,
+    OP_SUB,
 
     /// SBC - Subtract with carry/borrow.
     /// Semantics: Rd := Rn - Op2 - (1 - C)
-    SBC,
+    OP_SBC,
 
     /// RSB - Reverse subtract.
     /// Semantics: Rd := Op2 - Rn
-    RSB,
+    OP_RSB,
 
     /// RSC - Reverse subtract with carry/borrow.
     /// Semantics: Rd := Op2 - Rn - (1 - C)
-    RSC,
+    OP_RSC,
 
 
     // Test
 
     /// TST - Test (AND, flags only; no Rd write).
     /// Semantics: flags := Rn & Op2
-    TST,
+    OP_TST,
 
     /// TEQ - Test equivalence (XOR, flags only; no Rd write).
     /// Semantics: flags := Rn ^ Op2
-    TEQ,
+    OP_TEQ,
 
     // Compare
 
     /// CMP - Compare (SUB, flags only; no Rd write).
     /// Semantics: flags := Rn - Op2
-    CMP,
+    OP_CMP,
 
     /// CMN - Compare negative (ADD, flags only; no Rd write).
     /// Semantics: flags := Rn + Op2
-    CMN,
+    OP_CMN,
 
 
     /// BIC - Bit clear (AND with inverted operand).
     /// Semantics: Rd := Rn & ~Op2
-    BIC,
+    OP_BIC,
 
     // Move
 
     /// MOV — Move (copy operand).
     /// Semantics: Rd := Op2
-    MOV,
+    OP_MOV,
 
     /// MVN - Move NOT (bitwise invert).
     /// Semantics: Rd := ~Op2
-    MVN,
+    OP_MVN,
 
     /// No operation
-    NOP,
+    OP_NOP,
 
     /// Halt, stops the program
-    HALT,
-} Opcode;
+    OP_HALT,
+} OpCode;

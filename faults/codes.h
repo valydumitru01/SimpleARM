@@ -3,8 +3,22 @@
 //
 #pragma once
 
-typedef enum FaultCode {
-    FAULT_NONE = 0,
-    FAULT_ALIGNMENT = 1,
-    FAULT_OUT_OF_BOUNDS = 2,
-} FaultCode;
+typedef enum ReturnStatus {
+    OK = 0,
+    FAULT,
+    ERROR,
+    HALT,
+} ReturnStatus;
+
+typedef enum FaultCodeFetch {
+    FAULT_ALIGNMENT,
+} FaultCodeFetch;
+
+typedef enum FaultCodeDecode {
+    FAULT_INVALID_OPCODE,
+} FaultCodeDecode;
+
+typedef enum FaultCodeExecute {
+    FAULT_OUT_OF_BOUNDS,
+} FaultCodeExecute;
+

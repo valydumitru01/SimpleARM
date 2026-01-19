@@ -19,14 +19,14 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "memory.h"
-#include "cpu.h"
-#include "decoder/decoder.h"
-#include "instructions/instructions.h"
+#include "cpu/cpu.h"
+#include "instructions/data_processing/data_processing.h"
+#include "instructions/instructions_enums.h"
 #include "faults/codes.h"
 
 
 
-static uint32_t fetch(const ProgramMemory *mem, const uint32_t pc, FaultCode *fault_out) {
+static uint32_t fetch(const ProgramMemory *mem, const uint32_t pc, FaultCodeExecute *fault_out) {
     // Validate inputs
     assert(mem != NULL);
     assert(mem->words != NULL);
@@ -72,7 +72,7 @@ int main(void) {
     memory.words[6] = ENCODE(OP_LDR, 1, 1, 1);
     memory.words[7] = ENCODE(OP_ORR, 1, 1, 1);
 
-    FaultCode fault_out = FAULT_NONE;
+    FaultCodeExecute fault_out = FAULT_NONE;
     do {
         const uint32_t pc = cpu_get_pc(&cpu);
         const uint32_t raw_inst = fetch(&memory, pc, &fault_out);
