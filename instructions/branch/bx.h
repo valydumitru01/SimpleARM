@@ -7,17 +7,18 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "memory.h"
 #include "cpu/cpu.h"
-#include "executor/executor.h"
-#include "../data_processing/data_proc_op.h"
 #include "../cond.h"
+#include "faults/codes.h"
 
 
 typedef struct DecodedBx {
     word_t raw;
+    /// The condition code to evaluate
     CondCode cond;
-    /// Index of the register B (target address)
-    /// Is of type uint8_t because we have only 16 registers (0-15)
+    /// Index of the register that contains the address
+    /// to branch to
     RegisterIndex rn;
 } DecodedBx;
 
@@ -26,7 +27,7 @@ typedef struct DecodedBx {
 /// [31:28]: Condition field
 /// [27: 4]: '0001 0010 1111 1111 1111 0001' fill bits
 /// [ 4: 0]: Register index
-static inline DecodedBx decode_bx(const word_t raw_inst, FaultCode *fault_out) {
+static inline DecodedBx decode_bx(const word_t raw_inst, FaultCodeExecute *fault_out) {
 
     static const word_t RN_MASK = 0x0000000F;
     static const uint8_t COND_RIGHT_SHIFT = 28;

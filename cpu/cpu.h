@@ -31,7 +31,7 @@ static inline CpuState construct_cpu_state() {
     return cpu;
 }
 
-static inline void cpu_set_reg(CpuState *cpu, const RegisterIndex index, const uint32_t value) {
+static inline void cpu_set_reg(CpuState *cpu, const RegisterIndex index, const word_t value) {
     // Defensive: cpu must be valid
     assert(cpu != NULL);
     assert(index < REGISTER_COUNT);

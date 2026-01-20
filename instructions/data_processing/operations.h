@@ -18,42 +18,174 @@
 #include "cpu/cpu.h"
 #include "instructions/data_processing/data_processing_decoder.h"
 
+static inline void mov_op(CpuState* cpu, const register_index_t reg, const word_t value, bool rises_cpsr) {
+    cpu_set_reg(cpu, reg, value);
 
-static inline void mov_op(CpuState *cpu, const DecodedDataProcessing *inst) {
-    assert(cpu != NULL);
-    assert(inst != NULL);
-
-
-    const register_index_t destination_reg_idx = inst->rd;
-
-    if (inst->immediate_mode) {
-        cpu_set_reg(cpu, destination_reg_idx, inst->imm_operand.imm8);
-    } else {
-        const word_t operator1_reg = cpu_get_reg(cpu, inst->rn);
-        cpu_set_reg(cpu, destination_reg_idx, operator1_reg);
-    }
-    const word_t destination_reg = cpu_get_reg(cpu, destination_reg_idx);
-    cpu_extract_nz(&cpu->cpsr, destination_reg);
+    if (!rises_cpsr) return;
+    cpsr_extract_zero(&cpu->cpsr, value);
+    cpsr_extract_negative(&cpu->cpsr, value);
 }
 
-static inline void add_op(CpuState* cpu, const DecodedDataProcessing* inst) {
-    assert(cpu != NULL);
-    assert(inst != NULL);
+static inline void and_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2, bool rises_cpsr) {
+    // Operation
+    const word_t result = operand1 & operand2;
+    cpu_set_reg(cpu, reg, result);
 
-    const register_index_t destination_reg_idx = inst->rd;
-    const word_t operator1_reg = cpu_get_reg(cpu, inst->rn);
+    // CPSR updates
+    if (!rises_cpsr) return;
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+}
 
-    if (inst->immediate_mode) {
-        const word_t add_result = cpu_get_reg(cpu, operator1_reg) + inst->imm_operand.imm8;
-        cpu_set_reg(cpu, destination_reg_idx, add_result);
-    } else {
-        const word_t operator2_reg = cpu_get_reg(cpu, inst->rn);
-        const word_t add_result = cpu_get_reg(cpu, operator1_reg) + cpu_get_reg(cpu, operator2_reg);
-        cpu_set_reg(cpu, destination_reg_idx, add_result);
-    }
+static inline void eor_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2, bool rises_cpsr) {
+    // Operation
+    const word_t result = operand1 ^ operand2;
+    cpu_set_reg(cpu, reg, result);
+
+    // CPSR updates
+    if (!rises_cpsr) return;
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+}
+
+static inline void sub_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2, bool rises_cpsr) {
+    // Operation
+    const word_t result = operand1 - operand2;
+    cpu_set_reg(cpu, reg, result);
+
+    // CPSR updates
+    if (!rises_cpsr) return;
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+    cpsr_extract_carry_sub(&cpu->cpsr, operand1, operand2);
+    cpsr_extract_overflow_sub(&cpu->cpsr, operand1, operand2, result);
+}
+
+static inline void rsb_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2, bool rises_cpsr) {
+    // Operation
+    const word_t result = operand2 - operand1;
+    cpu_set_reg(cpu, reg, result);
+
+    // CPSR updates
+    if (!rises_cpsr) return;
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+    cpsr_extract_carry_sub(&cpu->cpsr, operand2, operand1); // Reversed operands
+    cpsr_extract_overflow_sub(&cpu->cpsr, operand2, operand1, result); // Reversed operands
+}
+
+static inline void add_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2, bool rises_cpsr) {
+    // Operation
+    const word_t result = operand1 + operand2;
+    cpu_set_reg(cpu, reg, result);
+
+    // CPSR updates
+    if (!rises_cpsr) return;
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+    cpsr_extract_carry_add(&cpu->cpsr, operand2, operand1);
+    cpsr_extract_overflow_add(&cpu->cpsr, operand1, operand2, result);
 
 }
 
-static inline void and_op(CpuState* cpu, const DecodedDataProcessing* inst) {
+static inline void adc_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2, bool rises_cpsr) {
+    // Operation
+    const word_t carry = cpsr_get_carry(&cpu->cpsr) ? 1 : 0;
+    const word_t operand2_with_carry = operand2 + carry;
+    const word_t result = operand1 + operand2_with_carry;
+    cpu_set_reg(cpu, reg, result);
 
+    // CPSR updates
+    if (!rises_cpsr) return;
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+    cpsr_extract_carry_add(&cpu->cpsr, operand1, operand2_with_carry);
+    cpsr_extract_overflow_add(&cpu->cpsr, operand1, operand2_with_carry, result);
+}
+
+static inline void sbc_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2, bool rises_cpsr) {
+    // Operation
+    const word_t carry = cpsr_get_carry(&cpu->cpsr) ? 1 : 0;
+    const word_t operand2_with_carry = operand2 - carry;
+    const word_t result = operand1 - operand2_with_carry;
+    cpu_set_reg(cpu, reg, result);
+
+    // CPSR updates
+    if (!rises_cpsr) return;
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+    cpsr_extract_carry_sub(&cpu->cpsr, operand1, operand2_with_carry);
+    cpsr_extract_overflow_sub(&cpu->cpsr, operand1, operand2_with_carry, result);
+
+}
+
+static inline void rsc_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2, bool rises_cpsr) {
+    // Operation
+    const word_t carry = cpsr_get_carry(&cpu->cpsr) ? 1 : 0;
+    const word_t operand1_with_carry = operand1 + carry;
+    const word_t result = operand2 - operand1_with_carry;
+    cpu_set_reg(cpu, reg, result);
+
+    // CPSR updates
+    if (!rises_cpsr) return;
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+    cpsr_extract_carry_sub(&cpu->cpsr, operand2, operand1_with_carry); // Reversed operands
+    cpsr_extract_overflow_sub(&cpu->cpsr, operand2, operand1_with_carry, result); // Reversed operands
+
+}
+
+static inline void tst_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2) {
+    // Operation
+    // No storing of the result
+    const word_t result = operand1 & operand2;
+
+    // CPSR updates
+    // We update the flags no matter the S flag
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+}
+static inline void teq_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2) {
+    // Operation
+    // No storing of the result
+    const word_t result = operand1 ^ operand2;
+
+    // CPSR updates
+    // We update the flags no matter the S flag
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+}
+static inline void cmp_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2) {
+    // Operation
+    // No storing of the result
+    const word_t result = operand1 - operand2;
+
+    // CPSR updates
+    // We update the flags no matter the S flag
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+    //
+
+}
+static inline void cmn_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2) {
+    // Operation
+    // No storing of the result
+    const word_t result = operand1 + operand2;
+
+    // CPSR updates
+    // We update the flags no matter the S flag
+    cpsr_extract_zero(&cpu->cpsr, result);
+    cpsr_extract_negative(&cpu->cpsr, result);
+}
+static inline void orr_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2) {
+    const word_t result = operand1 | operand2;
+    cpu_set_reg(cpu, reg, result);
+}
+static inline void bic_op(CpuState* cpu, const register_index_t reg, const word_t operand1, const word_t operand2) {
+    const word_t result = operand1 & ~operand2;
+    cpu_set_reg(cpu, reg, result);
+}
+static inline void mvn_op(CpuState* cpu, const register_index_t reg, const word_t operand2, bool rises_cpsr) {
+    const word_t result = ~operand2;
+    cpu_set_reg(cpu, reg, result);
 }

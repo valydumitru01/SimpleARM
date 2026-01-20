@@ -2,6 +2,7 @@
 // Created by valentin on 12/20/25.
 //
 #pragma once
+#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 /// CPSR Flag for Negative condition
@@ -53,11 +54,11 @@ static inline bool cpsr_get_carry(const Cpsr* c) { return c->value & CPSR_FLAG_C
 static inline bool cpsr_get_overflow(const Cpsr* c) { return c->value & CPSR_FLAG_V; }
 static inline bool cpsr_get_thumb(const Cpsr* c) { return c->value & CPSR_FLAG_T; }
 
-static inline void cpsr_clear_negative(Cpsr* cpsr) { cpsr->value &= CPSR_FLAG_N; }
-static inline void cpsr_clear_zero(Cpsr* cpsr) { cpsr->value &= CPSR_FLAG_Z; }
-static inline void cpsr_clear_carry(Cpsr* cpsr) { cpsr->value &= CPSR_FLAG_C; }
-static inline void cpsr_clear_overflow(Cpsr* cpsr) { cpsr->value &= CPSR_FLAG_V; }
-static inline void cpsr_clear_thumb(Cpsr* cpsr) { cpsr->value &= CPSR_FLAG_T; }
+static inline void cpsr_clear_negative(Cpsr* cpsr) { cpsr->value &= ~CPSR_FLAG_N; }
+static inline void cpsr_clear_zero(Cpsr* cpsr) { cpsr->value &= ~CPSR_FLAG_Z; }
+static inline void cpsr_clear_carry(Cpsr* cpsr) { cpsr->value &= ~CPSR_FLAG_C; }
+static inline void cpsr_clear_overflow(Cpsr* cpsr) { cpsr->value &= ~CPSR_FLAG_V; }
+static inline void cpsr_clear_thumb(Cpsr* cpsr) { cpsr->value &= ~CPSR_FLAG_T; }
 
 static inline void cpsr_set_negative(Cpsr* cpsr) { cpsr->value |= CPSR_FLAG_N; }
 static inline void cpsr_set_zero(Cpsr* cpsr) { cpsr->value |= CPSR_FLAG_Z; }
@@ -70,9 +71,10 @@ static inline void cpsr_extract_negative(Cpsr* cpsr, const uint32_t value) {
     assert(cpsr != NULL);
 
     // N flag: set if most significative bit (bit 31) is 1
-    if ((value & 0x80000000u) != 0u) {
+    if ((value & 0x80000000u) != 0u)
         cpsr_set_negative(cpsr);
-    }
+    else
+        cpsr_clear_negative(cpsr);
 }
 
 static inline void cpsr_extract_zero(Cpsr* cpsr, const uint32_t value) {
@@ -80,52 +82,74 @@ static inline void cpsr_extract_zero(Cpsr* cpsr, const uint32_t value) {
     assert(cpsr != NULL);
 
     // Z flag: set if result is exactly zero
-    if (value == 0u) {
+    if (value == 0u)
         cpsr_set_zero(cpsr);
-    }
+    else
+        cpsr_clear_zero(cpsr);
+}
+
+static inline void cpsr_extract_overflow_add(Cpsr* cpsr, const word_t operand1, const word_t operand2, const word_t result) {
+    assert(cpsr != NULL);
+    static const word_t SIGN_EXTRACT_MASK = 0x80000000u;
+
+    const word_t a_b_difference = operand1 ^ operand2;
+    const word_t a_r_difference = operand1 ^ result;
+
+    // ADD overflow:
+    // - operands have the same sign
+    const bool same_sign_operands = (a_b_difference & SIGN_EXTRACT_MASK) == 0u;
+    // - result sign differs from operand a
+    const bool result_differs = (a_r_difference & SIGN_EXTRACT_MASK) != 0u;
+
+    const bool overflow = same_sign_operands && result_differs;
+
+    if (overflow) cpsr_set_overflow(cpsr);
+    else cpsr_clear_overflow(cpsr);
+}
+
+static inline void cpsr_extract_overflow_sub(Cpsr* cpsr, const word_t operand1, const word_t operand2, const word_t result) {
+    assert(cpsr != NULL);
+    static const word_t SIGN_EXTRACT_MASK = 0x80000000u;
+
+    const word_t a_b_difference = operand1 ^ operand2;
+    const word_t a_r_difference = operand1 ^ result;
+
+    // SUB overflow (r = a - b):
+    // - operands have different signs
+    const bool different_sign_operands = (a_b_difference & SIGN_EXTRACT_MASK) != 0u;
+    // - result sign differs from operand a
+    const bool result_differs = (a_r_difference & SIGN_EXTRACT_MASK) != 0u;
+
+    const bool overflow = different_sign_operands && result_differs;
+
+    if (overflow) cpsr_set_overflow(cpsr);
+    else cpsr_clear_overflow(cpsr);
 }
 
 
-static inline void cpu_extract_nz(Cpsr* cpsr, const uint32_t value) {
-    // Defensive: cpu must be valid
-    assert(cpsr != NULL);
-
-    // Clear N and Z; preserve everything else (including C and V)
-    cpsr_clear_negative(cpsr);
-    cpsr_clear_zero(cpsr);
-
-    // Extract N and Z from the result value
-    cpsr_extract_negative(cpsr, value);
-    cpsr_extract_zero(cpsr, value);
-}
-
-
-static inline void cpu_set_add_flags(Cpsr* cpsr, const uint32_t a, uint32_t b, const uint32_t result) {
-    assert(cpsr != NULL);
-
-    // C Flag: Set if the result carries (goes over the limit in add)
-    // If the result is less than one of the operands, a carry occurred
-    if (result < a) {
+static inline void cpsr_extract_carry_add(Cpsr* cpsr, const word_t operand1, const word_t operand2) {
+    uint64_t wide_result = (uint64_t) operand1 + (uint64_t) operand2;
+    // If the next bit of the msb of 32 bits is set, a carry occurred
+    // (meaning the result is more than what 32 bits can represent)
+    if ((wide_result >> 32) != 0) {
         // Set the C flag
         cpsr_set_carry(cpsr);
     }
     else {
-        // Remove the C flag
+        // No carry occurred
         cpsr_clear_carry(cpsr);
     }
 }
 
-static inline void cpu_set_sub_flags(Cpsr* cpsr, const uint32_t a, const uint32_t b, const uint32_t result) {
-    assert(cpsr != NULL);
-
+static inline void cpsr_extract_carry_sub(Cpsr* cpsr, const word_t operand1, const word_t operand2) {
     // C Flag: Set if the operation does NOT borrow (a >= b)
-    // If a is greater than or equal to b, no borrow occurred
-    if (a >= b) {
+    // If it is greater than or equal to b, no borrow occurred
+    if (operand1 >= operand2) {
         // Set the C flag
         cpsr_set_carry(cpsr);
     }
     else {
-        // Remove the C flag
+        // No carry occurred
         cpsr_clear_carry(cpsr);
     }
 }

@@ -7,10 +7,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "memory.h"
 #include "cpu/cpu.h"
-#include "executor/executor.h"
-#include "decoder/decoder.h"
-#include "../cond.h"
+#include "instructions/cond.h"
+#include "faults/codes.h"
 
 typedef struct DecodedB {
     word_t raw;
@@ -18,12 +18,12 @@ typedef struct DecodedB {
     CondCode cond;
     /// Boolean flag to indicate if we store the pc to link register
     bool link;
-    /// 32 bits signed offset
-    /// uses int32 as it is already decoded
+    /// 32-bit signed offset to branch to
+    /// This value must be added to the PC to get the target address
     int32_t offset;
 } DecodedB;
 
-static inline DecodedB decode_b(const word_t raw_inst, FaultCode* fault_out) {
+static inline DecodedB decode_b(const word_t raw_inst, FaultCodeDecode* fault_out) {
     static const word_t OFFSET_MASK = 0x00FFFFFF;
     static const word_t LINK_MASK = 0x1000000;
     static const word_t COND_MASK = 0xF0000000;
@@ -51,15 +51,17 @@ static inline DecodedB decode_b(const word_t raw_inst, FaultCode* fault_out) {
     return inst;
 }
 
-static inline void b_op(CpuState* cpu, const DecodedB* inst) {
+static inline void b_op(CpuState* cpu, const DecodedB* inst, FaultCodeExecute* fault_out) {
     static const word_t LINK_ADDRESS_CLEARED_BITS_MASK = ~3u;
     assert(cpu != NULL);
     assert(inst != NULL);
+
+
     if (!cond_passed(inst->cond, &cpu->cpsr)) {
         return;
     }
 
-    word_t pc = cpu_get_reg(cpu, PC_REGISTER_INDEX);
+    const word_t pc = cpu_get_reg(cpu, PC_REGISTER_INDEX);
     if (inst->link) {
         // Subtract one word to account for instruction prefetch
         // PC points two instructions ahead, and we need to store the next instruction
